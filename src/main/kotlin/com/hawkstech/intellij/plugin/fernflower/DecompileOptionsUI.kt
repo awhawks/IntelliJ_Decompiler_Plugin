@@ -56,11 +56,6 @@ class DecompileOptionsUI(project:Project):DialogWrapper(project) {
 	private var ban:JTextArea
 	private var log:ComboBox<String>
 
-	init {
-		super.getButton(super.getOKAction())?.addActionListener { event ->
-		}
-	}
-
 	fun getAttachOption():Boolean {
 		return attachOption
 	}

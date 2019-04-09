@@ -2,6 +2,7 @@
     <id>com.hawkstech.intellij.plugin.fernflowerdecompiler</id>
     <name>Fernflower Decompiler with options plugin</name>
     <vendor email="awhawks@writeme.com" url="http://www.hawkstech.com">Hawkstech</vendor>
+    <idea-version since-build="2018.3"/>
 
     <description><![CDATA[
     Plugin for IntelliJ that lets you run the built in Fernflower with options and store the source in your project.
