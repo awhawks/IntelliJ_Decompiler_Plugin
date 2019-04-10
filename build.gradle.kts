@@ -6,7 +6,7 @@ plugins {
 }
 
 group   = "com.hawkstech.intellij.plugin"
-version = "0.0.1"
+version = "0.0.2"
 
 java {
 	sourceCompatibility = JavaVersion.VERSION_1_8
@@ -28,7 +28,7 @@ repositories {
 
 tasks.withType<PatchPluginXmlTask> {
 	changeNotes("""
-    <p><strong>0.0.1 initial plugin 2019/03/29</strong></p>
+    <p><strong>0.0.2 initial plugin 2019/03/29</strong></p>
     <ul class="simple">
     <li>Initial plugin for IntelliJ 2018.3</li>
     </ul>

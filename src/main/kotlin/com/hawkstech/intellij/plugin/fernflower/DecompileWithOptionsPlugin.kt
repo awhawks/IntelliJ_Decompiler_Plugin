@@ -2,15 +2,11 @@ package com.hawkstech.intellij.plugin.fernflower
 
 import com.google.common.base.Preconditions.checkNotNull
 import com.google.common.base.Preconditions.checkState
-import com.google.common.base.Strings
 import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.ide.util.PropertiesComponent
 import com.intellij.notification.Notification
 import com.intellij.notification.NotificationType
-import com.intellij.openapi.actionSystem.AnAction
-import com.intellij.openapi.actionSystem.AnActionEvent
-import com.intellij.openapi.actionSystem.CommonDataKeys
-import com.intellij.openapi.actionSystem.PlatformDataKeys
+import com.intellij.openapi.actionSystem.*
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.ex.ApplicationManagerEx
@@ -34,6 +30,7 @@ import org.jetbrains.java.decompiler.main.DecompilerContext
 import org.jetbrains.java.decompiler.main.Fernflower
 import org.jetbrains.java.decompiler.main.extern.IBytecodeProvider
 import org.jetbrains.java.decompiler.main.extern.IFernflowerLogger
+import org.jetbrains.java.decompiler.main.extern.IFernflowerPreferences
 import org.jetbrains.java.decompiler.main.extern.IResultSaver
 import org.jetbrains.java.decompiler.util.InterpreterUtil
 import java.io.File
@@ -56,16 +53,16 @@ import kotlin.collections.HashMap
  */
 class DecompileWithOptionsPlugin: AnAction(),IBytecodeProvider, IResultSaver {
 	private val logger = Logger.getInstance(DecompileWithOptionsPlugin::class.java)
-	private val baseDirProjectSettingsKey = "com.hawkstech.intellij.plugin.fernflower.baseDir"
-	private val srcDirProjectSettingsKey  = "com.hawkstech.intellij.plugin.fernflower.srcDir"
 
 	// From IdeaDecompiler
 	private val legalNoticeKey  = "decompiler.legal.notice.accepted"
 	private val declineExitCode = DialogWrapper.NEXT_USER_EXIT_CODE
 
 	private var isAttachOption:Boolean = false
-	private var decompilerOptions:Map<String, Any> = HashMap()
-	private var tmpDir:File = File("dstNotSetYet")
+	private var decompiledJarDir:String = "NotSetYet"
+	private var decompiledSrcDir:String = "NotSetYet"
+	private var decompilerOptions:MutableMap<String, Any> = mutableMapOf()
+	private var tmpDir:File = File("NotSetYet")
 
 	/**
 	 * show 'decompile and attach' option only for *.jar files
@@ -86,6 +83,12 @@ class DecompileWithOptionsPlugin: AnAction(),IBytecodeProvider, IResultSaver {
 
 	override fun actionPerformed(event: AnActionEvent) {
 		val project = event.project ?: return
+
+		val selectedJarfile:VirtualFile?  = DataKeys.VIRTUAL_FILE.getData(event.dataContext)
+		val selectedJarFolder:VirtualFile = selectedJarfile!!.parent
+
+		val storedSettings = SettingsUtils(project, selectedJarFolder)
+
 
 		if (!PropertiesComponent.getInstance().isValueSet(legalNoticeKey)) {
 			val title   = IdeaDecompilerBundle.message("legal.notice.title", "Legal Terms")
@@ -114,22 +117,60 @@ class DecompileWithOptionsPlugin: AnAction(),IBytecodeProvider, IResultSaver {
 			}
 		}
 
-		val baseDirPath = getBaseDirPath(project, baseDirProjectSettingsKey, "Select Project Specific Folder For Storing Decompiled Sources")
-		if (!baseDirPath.isPresent) {
-			return
-		}
-		val srcDirPath = getBaseDirPath(project, srcDirProjectSettingsKey, "Select directory for extracted source Files")
-		if (!srcDirPath.isPresent) {
-			return
-		}
 		val sourceVFs = event.getData(PlatformDataKeys.VIRTUAL_FILE_ARRAY)
 		checkState(sourceVFs != null && sourceVFs.isNotEmpty(), "event#getData(VIRTUAL_FILE_ARRAY) returned empty array")
 
-		val content = DecompileOptionsUI(project)
+		val content = DecompileOptionsUI(project, storedSettings)
 
 		if(content.showAndGet()) {
-			isAttachOption    = content.getAttachOption()
-			decompilerOptions = content.getParsedOptions()
+			isAttachOption   = content.getAttachOption()
+			decompiledJarDir = content.getDecompiledJarDir()
+			decompiledSrcDir = content.getDecompiledSrcDir()
+			content.getParsedOptions().forEach{ entry ->
+				val fernKey = when(entry.key){
+					SettingsUtils.SettingNames.REMOVE_BRIDGE                -> IFernflowerPreferences.REMOVE_BRIDGE
+					SettingsUtils.SettingNames.REMOVE_SYNTHETIC             -> IFernflowerPreferences.REMOVE_SYNTHETIC
+					SettingsUtils.SettingNames.DECOMPILE_INNER              -> IFernflowerPreferences.DECOMPILE_INNER
+					SettingsUtils.SettingNames.DECOMPILE_CLASS_1_4          -> IFernflowerPreferences.DECOMPILE_CLASS_1_4
+					SettingsUtils.SettingNames.DECOMPILE_ASSERTIONS         -> IFernflowerPreferences.DECOMPILE_ASSERTIONS
+					SettingsUtils.SettingNames.HIDE_EMPTY_SUPER             -> IFernflowerPreferences.HIDE_EMPTY_SUPER
+					SettingsUtils.SettingNames.HIDE_DEFAULT_CONSTRUCTOR     -> IFernflowerPreferences.HIDE_DEFAULT_CONSTRUCTOR
+					SettingsUtils.SettingNames.DECOMPILE_GENERIC_SIGNATURES -> IFernflowerPreferences.DECOMPILE_GENERIC_SIGNATURES
+					SettingsUtils.SettingNames.NO_EXCEPTIONS_RETURN         -> IFernflowerPreferences.NO_EXCEPTIONS_RETURN
+					SettingsUtils.SettingNames.ENSURE_SYNCHRONIZED_MONITOR  -> IFernflowerPreferences.ENSURE_SYNCHRONIZED_MONITOR
+					SettingsUtils.SettingNames.DECOMPILE_ENUM               -> IFernflowerPreferences.DECOMPILE_ENUM
+					SettingsUtils.SettingNames.REMOVE_GET_CLASS_NEW         -> IFernflowerPreferences.REMOVE_GET_CLASS_NEW
+					SettingsUtils.SettingNames.LITERALS_AS_IS               -> IFernflowerPreferences.LITERALS_AS_IS
+					SettingsUtils.SettingNames.BOOLEAN_TRUE_ONE             -> IFernflowerPreferences.BOOLEAN_TRUE_ONE
+					SettingsUtils.SettingNames.ASCII_STRING_CHARACTERS      -> IFernflowerPreferences.ASCII_STRING_CHARACTERS
+					SettingsUtils.SettingNames.SYNTHETIC_NOT_SET            -> IFernflowerPreferences.SYNTHETIC_NOT_SET
+					SettingsUtils.SettingNames.UNDEFINED_PARAM_TYPE_OBJECT  -> IFernflowerPreferences.UNDEFINED_PARAM_TYPE_OBJECT
+					SettingsUtils.SettingNames.USE_DEBUG_VAR_NAMES          -> IFernflowerPreferences.USE_DEBUG_VAR_NAMES
+					SettingsUtils.SettingNames.USE_METHOD_PARAMETERS        -> IFernflowerPreferences.USE_METHOD_PARAMETERS
+					SettingsUtils.SettingNames.REMOVE_EMPTY_RANGES          -> IFernflowerPreferences.REMOVE_EMPTY_RANGES
+					SettingsUtils.SettingNames.FINALLY_DEINLINE             -> IFernflowerPreferences.FINALLY_DEINLINE
+					SettingsUtils.SettingNames.IDEA_NOT_NULL_ANNOTATION     -> IFernflowerPreferences.IDEA_NOT_NULL_ANNOTATION
+					SettingsUtils.SettingNames.LAMBDA_TO_ANONYMOUS_CLASS    -> IFernflowerPreferences.LAMBDA_TO_ANONYMOUS_CLASS
+					SettingsUtils.SettingNames.BYTECODE_SOURCE_MAPPING      -> IFernflowerPreferences.BYTECODE_SOURCE_MAPPING
+					SettingsUtils.SettingNames.IGNORE_INVALID_BYTECODE      -> IFernflowerPreferences.IGNORE_INVALID_BYTECODE
+					SettingsUtils.SettingNames.VERIFY_ANONYMOUS_CLASSES     -> IFernflowerPreferences.VERIFY_ANONYMOUS_CLASSES
+
+					SettingsUtils.SettingNames.LOG_LEVEL                    -> IFernflowerPreferences.LOG_LEVEL
+					SettingsUtils.SettingNames.MAX_PROCESSING_METHOD        -> IFernflowerPreferences.MAX_PROCESSING_METHOD
+					SettingsUtils.SettingNames.RENAME_ENTITIES              -> IFernflowerPreferences.RENAME_ENTITIES
+					SettingsUtils.SettingNames.USER_RENAMER_CLASS           -> IFernflowerPreferences.USER_RENAMER_CLASS
+					SettingsUtils.SettingNames.NEW_LINE_SEPARATOR           -> IFernflowerPreferences.NEW_LINE_SEPARATOR
+					SettingsUtils.SettingNames.INDENT_STRING                -> IFernflowerPreferences.INDENT_STRING
+					SettingsUtils.SettingNames.BANNER                       -> IFernflowerPreferences.BANNER
+
+					//SettingsUtils.SettingNames.DUMP_ORIGINAL_LINES          -> IFernflowerPreferences.DUMP_ORIGINAL_LINES
+					//SettingsUtils.SettingNames.UNIT_TEST_MODE               -> IFernflowerPreferences.UNIT_TEST_MODE
+					else -> ""
+				}
+				if( fernKey.isNotEmpty() ) {
+					decompilerOptions[fernKey] = entry.value
+				}
+			}
 			object : Task.Backgroundable(project, "Decompiling...", true) {
 				override fun run(@NotNull indicator: ProgressIndicator) {
 					indicator.fraction = 0.1
@@ -137,7 +178,7 @@ class DecompileWithOptionsPlugin: AnAction(),IBytecodeProvider, IResultSaver {
 					sourceVFs!!.toList().stream() //
 							.filter { vf -> "jar" == vf.extension } //
 							.forEach { sourceVF ->
-								process(project, baseDirPath.get(), srcDirPath.get(), sourceVF, indicator, 1.0 / sourceVFs.size)
+								process(project, sourceVF, indicator, 1.0 / sourceVFs.size)
 							}
 
 					indicator.fraction = 1.0
@@ -151,26 +192,10 @@ class DecompileWithOptionsPlugin: AnAction(),IBytecodeProvider, IResultSaver {
 		}
 	}
 
-	private fun getBaseDirPath(project: Project, key:String, title:String ): Optional<String> {
-		//val result: String = FileChooser.chooseFile(FileChooserDescriptorFactory.createSingleFolderDescriptor().withTitle(title), project, null)!!.path
-		var result:String? = null
-        val baseDirPath:String = PropertiesComponent.getInstance(project).getValue(key)?:""
-        if (Strings.isNullOrEmpty(baseDirPath)) {
-            val form = FolderSelectionForm(project, title)
-            if (form.showAndGet()) {
-                result = form.selectedPath
-                PropertiesComponent.getInstance(project).setValue(key, result)
-            }
-        } else {
-            result = baseDirPath
-        }
-        return Optional.ofNullable(result)
-	}
-
-	private fun process(project: Project, baseDirPath: String, srcDirPath: String, sourceVF: VirtualFile, indicator: ProgressIndicator, fractionStep: Double):File {
+	private fun process(project: Project, sourceVF: VirtualFile, indicator: ProgressIndicator, fractionStep: Double):File {
 		indicator.text = "Decompiling '" + sourceVF.name + "'"
 		val libraryName = sourceVF.name.replace(".jar", "-sources.jar")
-		val fullPath = baseDirPath + File.separator + libraryName
+		val fullPath = decompiledJarDir + File.separator + libraryName
 		var outputFile = File(fullPath)
 		val jarFileSystemInstance = JarFileSystem.getInstance()
 		val jarRoot = jarFileSystemInstance.getJarRootForLocalFile(sourceVF)?: jarFileSystemInstance.getJarRootForLocalFile(Objects.requireNonNull<VirtualFile>(jarFileSystemInstance.getVirtualFileForJar(sourceVF)))!!
@@ -212,13 +237,13 @@ class DecompileWithOptionsPlugin: AnAction(),IBytecodeProvider, IResultSaver {
 					ZipFile(outputFile.absolutePath).use { zip ->
 						zip.entries().asSequence().forEach { entry ->
 							if(entry.isDirectory){
-								val dstDir = File("$srcDirPath/${entry.name}")
+								val dstDir = File("$decompiledSrcDir/${entry.name}")
 								if (!dstDir.exists()) {
 									dstDir.parentFile.mkdirs()
 								}
 							} else {
 								zip.getInputStream(entry).use { input ->
-									val dstFile = File("$srcDirPath/${entry.name}")
+									val dstFile = File("$decompiledSrcDir/${entry.name}")
 									if (!dstFile.exists()) {
 										dstFile.parentFile.mkdirs()
 										dstFile.createNewFile()
@@ -247,10 +272,10 @@ class DecompileWithOptionsPlugin: AnAction(),IBytecodeProvider, IResultSaver {
 	private fun attach(project: Project?, sourceVF: VirtualFile, resultJar: File) {
 		ApplicationManager.getApplication().invokeAndWait({
 			val resultJarVF = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(resultJar)!!
-			checkNotNull<VirtualFile>(resultJarVF, "could not find Virtual File of %s", resultJar.absolutePath)
+			checkNotNull(resultJarVF, "could not find Virtual File of %s", resultJar.absolutePath)
 			val resultJarRoot = JarFileSystem.getInstance().getJarRootForLocalFile(resultJarVF)!!
 			val roots = LibrarySourceRootDetectorUtil.scanAndSelectDetectedJavaSourceRoots(null,
-					arrayOf<VirtualFile>(resultJarRoot))
+					arrayOf(resultJarRoot))
 			writeCommandAction(project).run<RuntimeException> {
 
 				val currentModule = ProjectRootManager.getInstance(project!!).fileIndex .getModuleForFile(sourceVF, false)
