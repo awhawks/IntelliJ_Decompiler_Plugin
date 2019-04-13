@@ -307,18 +307,8 @@ class DecompileOptionsUI(project:Project, private val storedSettings:SettingsUti
 		optionsMap[SettingsUtils.SettingNames.BANNER]                       = storedSettings.getProperty( SettingsUtils.SettingNames.BANNER,                       "//\n// Source code recreated from a .class file by IntelliJ IDEA\n// (powered by Fernflower decompiler)\n//\n\n" )
 
 		title = "Fernflower Options"
-		val panel1 = JPanel()
-		panel1.layout = GridBagLayout()
 		mainJPanel = JPanel()
 		mainJPanel.layout = GridBagLayout()
-		panel1.add(mainJPanel, GridBagConstraints(
-				0, 0,
-				1, 1,
-				0.0, 0.0,
-				GridBagConstraints.CENTER, GridBagConstraints.NONE,
-				Insets(0, 0, 0, 0),
-				0, 0))
-
 
 		var gridY0 = 0
 		var gridY1 = 0
