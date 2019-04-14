@@ -64,4 +64,8 @@ class SettingsUtils(val project:Project, val selectedJarFolder:VirtualFile) {
 	fun setProperty(key:SettingNames, value:String){
 		PropertiesComponent.getInstance(project).setValue("${projectSettingsPrefix}.${key.name}", value)
 	}
+
+	fun removeProperty(key:SettingNames){
+		PropertiesComponent.getInstance(project).unsetValue("${projectSettingsPrefix}.${key.name}")
+	}
 }

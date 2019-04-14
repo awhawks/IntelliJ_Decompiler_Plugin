@@ -1,4 +1,5 @@
 import org.jetbrains.intellij.tasks.PatchPluginXmlTask
+import org.jetbrains.intellij.tasks.RunIdeTask
 
 plugins {
 	id("org.jetbrains.intellij") version "0.4.7"
@@ -33,4 +34,8 @@ tasks.withType<PatchPluginXmlTask> {
     <li>Initial plugin for IntelliJ 2018.3</li>
     </ul>
 	""".trimIndent())
+}
+
+tasks.withType<RunIdeTask> {
+	jvmArgs("-Xmx2G")
 }

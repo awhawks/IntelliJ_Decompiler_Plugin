@@ -24,8 +24,8 @@ import com.intellij.openapi.util.io.FileUtil
 import com.intellij.openapi.vfs.*
 import com.intellij.ui.components.LegalNoticeDialog
 import com.intellij.util.CommonProcessors
+import com.intellij.util.SystemProperties
 import org.jetbrains.annotations.NotNull
-import org.jetbrains.java.decompiler.IdeaDecompilerBundle
 import org.jetbrains.java.decompiler.main.DecompilerContext
 import org.jetbrains.java.decompiler.main.Fernflower
 import org.jetbrains.java.decompiler.main.extern.IBytecodeProvider
@@ -51,7 +51,7 @@ import kotlin.collections.HashMap
  * updated rferguson 12/9/17 and 9/2/18.
  * expanded with extra function awhawks 4/3/2019
  */
-class DecompileWithOptionsPlugin: AnAction(),IBytecodeProvider, IResultSaver {
+class DecompileWithOptionsPlugin: AnAction(), IBytecodeProvider, IResultSaver {
 	private val logger = Logger.getInstance(DecompileWithOptionsPlugin::class.java)
 
 	// From IdeaDecompiler
@@ -91,8 +91,8 @@ class DecompileWithOptionsPlugin: AnAction(),IBytecodeProvider, IResultSaver {
 
 
 		if (!PropertiesComponent.getInstance().isValueSet(legalNoticeKey)) {
-			val title   = IdeaDecompilerBundle.message("legal.notice.title", "Legal Terms")
-			val message = IdeaDecompilerBundle.message("legal.notice.text")
+			val title   = LegalBundle.message("legal.notice.title", "Legal Terms")
+			val message = LegalBundle.message("legal.notice.text")
 			val answer = LegalNoticeDialog.build(title, message)
 					.withCancelText("Decide Later")
 					.withCustomAction("Decline and restart", declineExitCode)
@@ -158,7 +158,7 @@ class DecompileWithOptionsPlugin: AnAction(),IBytecodeProvider, IResultSaver {
 					SettingsUtils.SettingNames.LOG_LEVEL                    -> IFernflowerPreferences.LOG_LEVEL
 					SettingsUtils.SettingNames.MAX_PROCESSING_METHOD        -> IFernflowerPreferences.MAX_PROCESSING_METHOD
 					SettingsUtils.SettingNames.RENAME_ENTITIES              -> IFernflowerPreferences.RENAME_ENTITIES
-					SettingsUtils.SettingNames.USER_RENAMER_CLASS           -> IFernflowerPreferences.USER_RENAMER_CLASS
+					//TODO SettingsUtils.SettingNames.USER_RENAMER_CLASS           -> IFernflowerPreferences.USER_RENAMER_CLASS
 					SettingsUtils.SettingNames.NEW_LINE_SEPARATOR           -> IFernflowerPreferences.NEW_LINE_SEPARATOR
 					SettingsUtils.SettingNames.INDENT_STRING                -> IFernflowerPreferences.INDENT_STRING
 					SettingsUtils.SettingNames.BANNER                       -> IFernflowerPreferences.BANNER
@@ -167,7 +167,7 @@ class DecompileWithOptionsPlugin: AnAction(),IBytecodeProvider, IResultSaver {
 					//SettingsUtils.SettingNames.UNIT_TEST_MODE               -> IFernflowerPreferences.UNIT_TEST_MODE
 					else -> ""
 				}
-				if( fernKey.isNotEmpty() ) {
+				if( fernKey.isNotEmpty() && entry.value.isNotEmpty() ) {
 					decompilerOptions[fernKey] = entry.value
 				}
 			}
@@ -199,6 +199,9 @@ class DecompileWithOptionsPlugin: AnAction(),IBytecodeProvider, IResultSaver {
 		var outputFile = File(fullPath)
 		val jarFileSystemInstance = JarFileSystem.getInstance()
 		val jarRoot = jarFileSystemInstance.getJarRootForLocalFile(sourceVF)?: jarFileSystemInstance.getJarRootForLocalFile(Objects.requireNonNull<VirtualFile>(jarFileSystemInstance.getVirtualFileForJar(sourceVF)))!!
+		val jdkRtJar  = File( SystemProperties.getJavaHome(), "jre/lib/rt.jar")
+		val jreRtJar  = File( SystemProperties.getJavaHome(), "lib/rt.jar")
+		val useRtJar  = jdkRtJar.exists() || jreRtJar.exists()
 
 		try {
 			tmpDir = FileUtil.createTempDirectory("decompiledTempDIR","ext")
@@ -209,9 +212,15 @@ class DecompileWithOptionsPlugin: AnAction(),IBytecodeProvider, IResultSaver {
 				val fernLogger = DecompileWithOptionsLogger()
 				//val fernLogger = PrintStreamLogger(System.out)
 				val engine = Fernflower(this, this, decompilerOptions, fernLogger)
+				if(useRtJar) {
+					val rtJar:File = if( jdkRtJar.exists() ) jdkRtJar else jreRtJar
+					engine.addLibrary(rtJar);
+				}
 				engine.addSource(srcJar)
 				try {
 					engine.decompileContext()
+				} catch(exc:Throwable) {
+					exc.printStackTrace()
 				} finally {
 					engine.clearContext()
 				}

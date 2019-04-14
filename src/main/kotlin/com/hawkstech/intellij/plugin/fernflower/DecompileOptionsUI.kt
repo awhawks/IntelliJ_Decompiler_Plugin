@@ -12,7 +12,6 @@ import kotlin.math.max
 import com.intellij.openapi.fileChooser.*
 import com.intellij.openapi.ui.*
 
-
 class DecompileOptionsUI(project:Project, private val storedSettings:SettingsUtils ):DialogWrapper(project) {
 	private val logger = Logger.getInstance(DecompileOptionsUI::class.java)
 	private val optionsMap:MutableMap<SettingsUtils.SettingNames, String> = mutableMapOf()
@@ -54,10 +53,7 @@ class DecompileOptionsUI(project:Project, private val storedSettings:SettingsUti
 	private var log:ComboBox<String>
 
 	private var decompiledJarFolder:TextFieldWithBrowseButton
-	private var decompiledJarFolderString:String = ""
-
 	private var decompiledSrcDir:TextFieldWithBrowseButton
-	private var decompiledSrcFolderString:String = ""
 
 	fun getAttachOption():Boolean {
 		return attachOption
@@ -78,6 +74,7 @@ class DecompileOptionsUI(project:Project, private val storedSettings:SettingsUti
 	fun getParsedOptions():Map<SettingsUtils.SettingNames, String> {
 		return mapOf(
 				SettingsUtils.SettingNames.ASCII_STRING_CHARACTERS      to optionsMap[SettingsUtils.SettingNames.ASCII_STRING_CHARACTERS     ]!!,
+				SettingsUtils.SettingNames.BANNER                       to optionsMap[SettingsUtils.SettingNames.BANNER                      ]!!,
 				SettingsUtils.SettingNames.BOOLEAN_TRUE_ONE             to optionsMap[SettingsUtils.SettingNames.BOOLEAN_TRUE_ONE            ]!!,
 				SettingsUtils.SettingNames.BYTECODE_SOURCE_MAPPING      to optionsMap[SettingsUtils.SettingNames.BYTECODE_SOURCE_MAPPING     ]!!,
 				SettingsUtils.SettingNames.DECOMPILE_ASSERTIONS         to optionsMap[SettingsUtils.SettingNames.DECOMPILE_ASSERTIONS        ]!!,
@@ -91,9 +88,12 @@ class DecompileOptionsUI(project:Project, private val storedSettings:SettingsUti
 				SettingsUtils.SettingNames.HIDE_EMPTY_SUPER             to optionsMap[SettingsUtils.SettingNames.HIDE_EMPTY_SUPER            ]!!,
 				SettingsUtils.SettingNames.IDEA_NOT_NULL_ANNOTATION     to optionsMap[SettingsUtils.SettingNames.IDEA_NOT_NULL_ANNOTATION    ]!!,
 				SettingsUtils.SettingNames.IGNORE_INVALID_BYTECODE      to optionsMap[SettingsUtils.SettingNames.IGNORE_INVALID_BYTECODE     ]!!,
+				SettingsUtils.SettingNames.INDENT_STRING                to optionsMap[SettingsUtils.SettingNames.INDENT_STRING               ]!!,
 				SettingsUtils.SettingNames.LAMBDA_TO_ANONYMOUS_CLASS    to optionsMap[SettingsUtils.SettingNames.LAMBDA_TO_ANONYMOUS_CLASS   ]!!,
 				SettingsUtils.SettingNames.LITERALS_AS_IS               to optionsMap[SettingsUtils.SettingNames.LITERALS_AS_IS              ]!!,
+				SettingsUtils.SettingNames.LOG_LEVEL                    to optionsMap[SettingsUtils.SettingNames.LOG_LEVEL                   ]!!,
 				SettingsUtils.SettingNames.MAX_PROCESSING_METHOD        to optionsMap[SettingsUtils.SettingNames.MAX_PROCESSING_METHOD       ]!!,
+				SettingsUtils.SettingNames.NEW_LINE_SEPARATOR           to optionsMap[SettingsUtils.SettingNames.NEW_LINE_SEPARATOR          ]!!,
 				SettingsUtils.SettingNames.NO_EXCEPTIONS_RETURN         to optionsMap[SettingsUtils.SettingNames.NO_EXCEPTIONS_RETURN        ]!!,
 				SettingsUtils.SettingNames.REMOVE_BRIDGE                to optionsMap[SettingsUtils.SettingNames.REMOVE_BRIDGE               ]!!,
 				SettingsUtils.SettingNames.REMOVE_EMPTY_RANGES          to optionsMap[SettingsUtils.SettingNames.REMOVE_EMPTY_RANGES         ]!!,
@@ -104,11 +104,8 @@ class DecompileOptionsUI(project:Project, private val storedSettings:SettingsUti
 				SettingsUtils.SettingNames.UNDEFINED_PARAM_TYPE_OBJECT  to optionsMap[SettingsUtils.SettingNames.UNDEFINED_PARAM_TYPE_OBJECT ]!!,
 				SettingsUtils.SettingNames.USE_DEBUG_VAR_NAMES          to optionsMap[SettingsUtils.SettingNames.USE_DEBUG_VAR_NAMES         ]!!,
 				SettingsUtils.SettingNames.USE_METHOD_PARAMETERS        to optionsMap[SettingsUtils.SettingNames.USE_METHOD_PARAMETERS       ]!!,
-				SettingsUtils.SettingNames.VERIFY_ANONYMOUS_CLASSES     to optionsMap[SettingsUtils.SettingNames.VERIFY_ANONYMOUS_CLASSES    ]!!,
-				SettingsUtils.SettingNames.NEW_LINE_SEPARATOR           to optionsMap[SettingsUtils.SettingNames.NEW_LINE_SEPARATOR          ]!!,
-				SettingsUtils.SettingNames.LOG_LEVEL                    to optionsMap[SettingsUtils.SettingNames.LOG_LEVEL                   ]!!,
-				SettingsUtils.SettingNames.INDENT_STRING                to optionsMap[SettingsUtils.SettingNames.INDENT_STRING               ]!!,
-				SettingsUtils.SettingNames.BANNER                       to optionsMap[SettingsUtils.SettingNames.BANNER                      ]!!
+				SettingsUtils.SettingNames.USER_RENAMER_CLASS           to optionsMap[SettingsUtils.SettingNames.USER_RENAMER_CLASS          ]!!,
+				SettingsUtils.SettingNames.VERIFY_ANONYMOUS_CLASSES     to optionsMap[SettingsUtils.SettingNames.VERIFY_ANONYMOUS_CLASSES    ]!!
 		)
 	}
 
@@ -122,7 +119,7 @@ class DecompileOptionsUI(project:Project, private val storedSettings:SettingsUti
 
 	override fun toString(): String {
 		val resultBuilder = StringBuilder()
-		optionsMap.forEach { k, v ->
+		optionsMap.forEach { (k, v) ->
 			resultBuilder.append(" -$k=$v")
 		}
 		return resultBuilder.toString()
@@ -152,6 +149,40 @@ class DecompileOptionsUI(project:Project, private val storedSettings:SettingsUti
 			}
 		}
 		return button
+	}
+
+	private fun setupRenamer(panel:JPanel, y:Int):JRadioButton {
+		val x    = 1
+		val key  = SettingsUtils.SettingNames.RENAME_ENTITIES
+		val text = "ren (0): rename ambiguous (resp. obfuscated) classes and class elements"
+		val renamereJRadioButton = setupJRadioButton(panel, key, x, y, text)
+		val urcKey = SettingsUtils.SettingNames.USER_RENAMER_CLASS
+		when(renamereJRadioButton.isSelected){
+			true -> {
+				val urcVal = MyRenamer::class.java.canonicalName
+				optionsMap[urcKey] = urcVal
+				storedSettings.setProperty(urcKey, urcVal)
+			}
+			false -> {
+				optionsMap.remove(urcKey)
+				storedSettings.removeProperty(urcKey)
+			}
+		}
+		renamereJRadioButton.addChangeListener { event ->
+			val sourceJRadioButton = event.source as JRadioButton
+			when(sourceJRadioButton.isSelected){
+				true -> {
+					val urcVal = MyRenamer::class.java.canonicalName
+					optionsMap[urcKey] = urcVal
+					storedSettings.setProperty(urcKey, urcVal)
+				}
+				false -> {
+					optionsMap.remove(urcKey)
+					storedSettings.removeProperty(urcKey)
+				}
+			}
+		}
+		return renamereJRadioButton
 	}
 
 	private fun setupJTextField( panel:JPanel, key:SettingsUtils.SettingNames, y:Int, text:String):JTextField {
@@ -184,7 +215,9 @@ class DecompileOptionsUI(project:Project, private val storedSettings:SettingsUti
 		return textField
 	}
 
-	private fun setupJTextArea( panel:JPanel, key:SettingsUtils.SettingNames, y:Int, text:String):JTextArea {
+	private fun setupBanner(panel:JPanel, y:Int):JTextArea {
+		val key  = SettingsUtils.SettingNames.BANNER
+		val text = "ban: set Banner for each source file"
 		val value = optionsMap[key]
 		val defaultValue = if ( value is String ) value else throw Exception("POPUP Error: $key value is not a String")
 		val label = JLabel(text)
@@ -213,8 +246,11 @@ class DecompileOptionsUI(project:Project, private val storedSettings:SettingsUti
 		return textArea
 	}
 
-	private fun setupComboBox(panel:JPanel, key:SettingsUtils.SettingNames, y:Int, selections:Array<String>, text:String):ComboBox<String> {
-		val value = optionsMap[key]
+	private fun setupLogLevel(panel:JPanel, y:Int):ComboBox<String> {
+		val selections = Array(IFernflowerLogger.Severity.values().size) { index -> IFernflowerLogger.Severity.values()[index].name }
+		val text       = "log (INFO): a logging level, possible values are TRACE, INFO, WARN, ERROR"
+		val key        = SettingsUtils.SettingNames.LOG_LEVEL
+		val value      = optionsMap[key]
 		val defaultValue = if ( value is String ) value else throw Exception("POPUP Error: $key value is not a String")
 		if(defaultValue !in selections) throw Exception("POPUP Error: $key value is not in selection values")
 		val label = JLabel(text)
@@ -243,7 +279,7 @@ class DecompileOptionsUI(project:Project, private val storedSettings:SettingsUti
 		return combo
 	}
 
-	private fun setupFileSelctor( project:Project, panel:JPanel, key:SettingsUtils.SettingNames, y:Int, titleText:String, descrText:String, saveSelectedDir: (String) -> Unit ):TextFieldWithBrowseButton {
+	private fun setupFileSelctor( project:Project, panel:JPanel, key:SettingsUtils.SettingNames, y:Int, titleText:String, descrText:String):TextFieldWithBrowseButton {
 		val label = JLabel(titleText)
 		panel.add(label, GridBagConstraints(
 				0, y,
@@ -340,21 +376,20 @@ class DecompileOptionsUI(project:Project, private val storedSettings:SettingsUti
 		bsm = setupJRadioButton( mainJPanel, SettingsUtils.SettingNames.BYTECODE_SOURCE_MAPPING     , 1, gridY1++, "bsm: Bytecode source mapping" )
 		iib = setupJRadioButton( mainJPanel, SettingsUtils.SettingNames.IGNORE_INVALID_BYTECODE     , 1, gridY1++, "iib: Ignore Invalid Bytecod" )
 		vac = setupJRadioButton( mainJPanel, SettingsUtils.SettingNames.VERIFY_ANONYMOUS_CLASSES    , 1, gridY1++, "vac: Verify Anonymous Classes" )
-		ren = setupJRadioButton( mainJPanel, SettingsUtils.SettingNames.RENAME_ENTITIES             , 1, gridY1++, "ren (0): rename ambiguous (resp. obfuscated) classes and class elements" )
+		ren = setupRenamer(      mainJPanel, gridY1++ )
 
 		var gridY2 = max( gridY0, gridY1 )
 		//urc = setupJTextField(   mainJPanel, SettingsUtils.SettingNames.USER_RENAMER_CLASS         , gridY2++, "urc (-): full name of a user-supplied class implementing IIdentifierRenamer interface. (currently not implemented in this plugin)")
 		mpm = setupJTextField(   mainJPanel, SettingsUtils.SettingNames.MAX_PROCESSING_METHOD      , gridY2++, "mpm (0): maximum allowed processing time per decompiled method, in seconds. 0 means no upper limit")
 		ind = setupJTextField(   mainJPanel, SettingsUtils.SettingNames.INDENT_STRING              , gridY2++, "ind: indentation string (default is 3 spaces)")
-		ban = setupJTextArea(    mainJPanel, SettingsUtils.SettingNames.BANNER                     , gridY2++, "ban: set Banner for each source file" )
 
-		val selection = Array(IFernflowerLogger.Severity.values().size) { index -> IFernflowerLogger.Severity.values()[index].name }
-		log                 = setupComboBox(            mainJPanel, SettingsUtils.SettingNames.LOG_LEVEL                  , gridY2++, selection, "log (INFO): a logging level, possible values are TRACE, INFO, WARN, ERROR" )
+		ban = setupBanner(       mainJPanel, gridY2++ )
+		log = setupLogLevel(     mainJPanel, gridY2++ )
 
 		attach              = setupJRadioButton(        mainJPanel, SettingsUtils.SettingNames.ATTACH_SOURCE_JAR, 0, gridY2++, "Attache source to jar")
 
-		decompiledJarFolder = setupFileSelctor(project, mainJPanel, SettingsUtils.SettingNames.DECOMPILED_JAR_DIR, gridY2++, "Select output folder for generated source JAR", "The xxx-sources.jar will be placed in this director") { selectedFolder:String -> decompiledJarFolderString = selectedFolder }
-		decompiledSrcDir    = setupFileSelctor(project, mainJPanel, SettingsUtils.SettingNames.DECOMPILED_SRC_DIR, gridY2++, "Select output folder for source tree",          "The decompiled will be placed in this director"     ) { selectedFolder:String -> decompiledSrcFolderString = selectedFolder }
+		decompiledJarFolder = setupFileSelctor(project, mainJPanel, SettingsUtils.SettingNames.DECOMPILED_JAR_DIR, gridY2++, "Select output folder for generated source JAR", "The xxx-sources.jar will be placed in this director")
+		decompiledSrcDir    = setupFileSelctor(project, mainJPanel, SettingsUtils.SettingNames.DECOMPILED_SRC_DIR, gridY2++, "Select output folder for source tree",          "The decompiled will be placed in this director"     )
 		logger.info("mexGridY0: $gridY0")
 		logger.info("mexGridY1: $gridY1")
 		logger.info("mexGridY2: $gridY2")
